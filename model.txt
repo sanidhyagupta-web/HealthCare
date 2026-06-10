@@ -1,0 +1,347 @@
+"""
+Drug-ADE extraction — W&B Sweep version.
+
+Runs on Kaggle with GPU accelerator enabled (T4 / P100 / A100).
+Uses QLoRA (4-bit bitsandbytes) on Qwen2.5-7B-Instruct.
+
+Parallelism:
+  Session 1 — creates the sweep and runs the first agent:
+    python medical_finetune.py
+
+  Session 2+ — joins the existing sweep:
+    WANDB_SWEEP_ID=<id from session 1> python medical_finetune.py
+
+Each session trains one hyperparameter configuration, evaluates it on the
+held-out test set, and logs all metrics + artifacts to W&B.
+Run eval_report.py after all sessions finish to produce the full report.
+"""
+
+# ── 0. Install packages ───────────────────────────────────────────────────────
+# !pip install -q transformers datasets accelerate peft trl bitsandbytes wandb tqdm
+
+import gc
+import json
+import os
+import time
+
+import pandas as pd
+import torch
+import wandb
+from datasets import Dataset, load_dataset
+from huggingface_hub import login
+from peft import LoraConfig
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from trl import SFTConfig, SFTTrainer
+
+# ── 1. Auth ───────────────────────────────────────────────────────────────────
+login(os.environ["HF_TOKEN"])
+wandb.login(key=os.environ["WANDB_API_KEY"])
+
+# ── 2. Constants ──────────────────────────────────────────────────────────────
+MODEL_ID         = "Qwen/Qwen2.5-7B-Instruct"
+WANDB_PROJECT    = "ade-qlora-sweep"
+BASE_OUTPUT_DIR  = "/kaggle/working/sweeps"
+REQUIRED_KEYS    = {"drug", "adverse_effect", "sentence"}
+
+SYSTEM_PROMPT = """You are a clinical pharmacovigilance extraction system.
+
+Given a medical sentence, extract the drug name and its associated adverse effect.
+
+Return ONLY valid JSON with keys: "drug", "adverse_effect", "sentence".
+Do not explain anything."""
+
+# ── 3. Sweep config ───────────────────────────────────────────────────────────
+# Grid: 2 × 2 = 4 total runs.
+# Start 4 Kaggle sessions (each with count=1) to run them fully in parallel,
+# or fewer sessions to run them in parallel batches.
+SWEEP_CONFIG = {
+    "method": "grid",
+    "metric": {"name": "eval/loss", "goal": "minimize"},
+    "parameters": {
+        "learning_rate":               {"values": [1e-4, 2e-4]},
+        "lora_r":                      {"values": [8, 16]},
+    },
+}
+
+# ── 4. Precision ──────────────────────────────────────────────────────────────
+use_bf16      = torch.cuda.is_bf16_supported()
+compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
+print(f"GPU: {torch.cuda.get_device_name(0)}")
+print(f"Precision: {'bf16' if use_bf16 else 'fp16'}  compute_dtype: {compute_dtype}")
+
+# ── 5. Tokenizer (loaded once, shared across all runs) ───────────────────────
+print(f"\nLoading tokenizer for {MODEL_ID}...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+
+# ── 6. Dataset — split raw rows so ground-truth labels stay aligned ───────────
+print("Loading ADE Corpus v2 (drug-ADE relation)...")
+raw_ds = load_dataset(
+    "ade-benchmark-corpus/ade_corpus_v2",
+    "Ade_corpus_v2_drug_ade_relation",
+    split="train",
+)
+print(f"Loaded {len(raw_ds)} drug-ADE relation examples.")
+
+# Split raw rows first so test ground-truth labels are easy to access later.
+_raw_train_test = raw_ds.train_test_split(test_size=0.2, seed=42)
+_raw_test_val   = _raw_train_test["test"].train_test_split(test_size=0.5, seed=42)
+
+raw_train = _raw_train_test["train"]
+raw_val   = _raw_test_val["train"]
+raw_test  = _raw_test_val["test"]
+
+print(f"Split — train: {len(raw_train)}  val: {len(raw_val)}  test: {len(raw_test)}\n")
+
+
+def format_example(row):
+    output = {
+        "drug":           row["drug"],
+        "adverse_effect": row["effect"],
+        "sentence":       row["text"],
+    }
+    messages = [
+        {"role": "system",    "content": SYSTEM_PROMPT},
+        {"role": "user",      "content": row["text"]},
+        {"role": "assistant", "content": json.dumps(output)},
+    ]
+    return {"text": tokenizer.apply_chat_template(messages, tokenize=False)}
+
+
+train_dataset = Dataset.from_list([format_example(r) for r in raw_train])
+val_dataset   = Dataset.from_list([format_example(r) for r in raw_val])
+# raw_test is used directly in the evaluation harness (no chat-template needed there).
+
+# ── 7. Evaluation harness ─────────────────────────────────────────────────────
+def compute_test_metrics(model, device):
+    """
+    Run greedy inference on every raw_test row and return:
+      - aggregate metrics dict  (logged to W&B summary)
+      - per-example results list (saved as CSV artifact)
+    """
+    model.eval()
+    results = []
+
+    for row in tqdm(raw_test, desc="Evaluating on test set"):
+        sentence  = row["text"]
+        true_drug = row["drug"].lower().strip()
+        true_ade  = row["effect"].lower().strip()
+
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": sentence},
+        ]
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=150,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+
+        pred_text = tokenizer.decode(
+            out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
+        ).strip()
+
+        valid_json    = False
+        schema_valid  = False
+        pred_drug     = ""
+        pred_ade      = ""
+        hallucinated  = False
+
+        try:
+            parsed = json.loads(pred_text)
+            valid_json = True
+            if REQUIRED_KEYS.issubset(parsed.keys()):
+                schema_valid = True
+                pred_drug = str(parsed.get("drug", "")).lower().strip()
+                pred_ade  = str(parsed.get("adverse_effect", "")).lower().strip()
+                # Hallucination: predicted entity doesn't appear in source sentence.
+                hallucinated = (
+                    (pred_drug and pred_drug not in sentence.lower()) or
+                    (pred_ade  and pred_ade  not in sentence.lower())
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        results.append({
+            "sentence":          sentence,
+            "true_drug":         true_drug,
+            "true_ade":          true_ade,
+            "pred_json":         pred_text,
+            "valid_json":        valid_json,
+            "schema_valid":      schema_valid,
+            "pred_drug":         pred_drug,
+            "pred_ade":          pred_ade,
+            "drug_exact_match":  pred_drug == true_drug,
+            "ade_exact_match":   pred_ade  == true_ade,
+            "hallucinated":      hallucinated,
+        })
+
+    n = len(results)
+    metrics = {
+        "test/json_validity":      sum(r["valid_json"]                              for r in results) / n,
+        "test/schema_validity":    sum(r["schema_valid"]                            for r in results) / n,
+        "test/drug_exact_match":   sum(r["drug_exact_match"]                        for r in results) / n,
+        "test/ade_exact_match":    sum(r["ade_exact_match"]                         for r in results) / n,
+        "test/overall_exact_match":sum((r["drug_exact_match"] and r["ade_exact_match"]) for r in results) / n,
+        "test/hallucination_rate": sum(r["hallucinated"]                            for r in results) / n,
+    }
+    return metrics, results
+
+
+# ── 8. Single training run (called by the W&B sweep agent) ───────────────────
+def train():
+    with wandb.init() as run:
+        cfg = wandb.config
+        run_output_dir = os.path.join(BASE_OUTPUT_DIR, run.name)
+        os.makedirs(run_output_dir, exist_ok=True)
+
+        print(f"\n{'='*60}")
+        print(f"Run: {run.name}")
+        print(f"  learning_rate = {cfg.learning_rate}")
+        print(f"  lora_r        = {cfg.lora_r}  (alpha = {cfg.lora_r * 2})")
+        print(f"{'='*60}\n")
+
+        # ── Model (loaded fresh per run to avoid CUDA state bleed) ────────────
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=True,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_ID,
+            quantization_config=bnb_config,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+
+        # ── LoRA — alpha = 2 × r is the standard starting heuristic ──────────
+        peft_config = LoraConfig(
+            r=cfg.lora_r,
+            lora_alpha=cfg.lora_r * 2,
+            lora_dropout=0.05,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        )
+
+        # ── Training ──────────────────────────────────────────────────────────
+        torch.cuda.reset_peak_memory_stats()
+        t0 = time.time()
+
+        trainer = SFTTrainer(
+            model=model,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            peft_config=peft_config,
+            args=SFTConfig(
+                output_dir=run_output_dir,
+                dataset_text_field="text",
+                per_device_train_batch_size=1,
+                gradient_accumulation_steps=4,
+                num_train_epochs=1,
+                learning_rate=cfg.learning_rate,
+                logging_steps=10,
+                save_steps=200,
+                eval_strategy="epoch",
+                fp16=not use_bf16,
+                bf16=use_bf16,
+                max_grad_norm=0.3,
+                report_to="wandb",
+            ),
+        )
+
+        trainer.train()
+        # Save final adapter to a clean subdirectory — avoids bundling the
+        # intermediate checkpoint-N/ dirs that save_steps writes to run_output_dir.
+        final_adapter_dir = os.path.join(run_output_dir, "final")
+        trainer.save_model(final_adapter_dir)
+
+        # ── Upload trained LoRA adapter to W&B ───────────────────────────────
+        model_artifact = wandb.Artifact(
+            name=f"qlora-adapter-{run.name}",
+            type="model",
+            description=f"QLoRA adapter — lr={cfg.learning_rate} lora_r={cfg.lora_r}",
+            metadata={"learning_rate": cfg.learning_rate, "lora_r": cfg.lora_r},
+        )
+        model_artifact.add_dir(final_adapter_dir)
+        run.log_artifact(model_artifact)
+
+        runtime   = time.time() - t0
+        vram_peak = torch.cuda.max_memory_allocated() / 1e9
+
+        # ── Test-set evaluation ───────────────────────────────────────────────
+        # SFTTrainer wraps `model` with LoRA internally and stores the result in
+        # trainer.model. The outer `model` variable still points to the original
+        # base model (un-adapted). Always use trainer.model for inference.
+        device = next(trainer.model.parameters()).device
+        test_metrics, results = compute_test_metrics(trainer.model, device)
+
+        wandb.log({
+            **test_metrics,
+            "runtime_seconds": runtime,
+            "vram_peak_gb":    vram_peak,
+        })
+
+        # ── Save per-example CSV as W&B artifact ──────────────────────────────
+        results_df   = pd.DataFrame(results)
+        results_path = os.path.join(run_output_dir, "test_results.csv")
+        results_df.to_csv(results_path, index=False)
+
+        artifact = wandb.Artifact(f"test-results-{run.name}", type="evaluation")
+        artifact.add_file(results_path)
+        run.log_artifact(artifact)
+
+        # ── Log 5 successes + 5 failures as a W&B table ───────────────────────
+        successes = [r for r in results if  r["drug_exact_match"] and r["ade_exact_match"]][:5]
+        failures  = [r for r in results if not r["drug_exact_match"] or not r["ade_exact_match"]][:5]
+
+        wandb.log({
+            "inference_examples": wandb.Table(
+                columns=["type", "sentence", "pred_json",
+                         "true_drug", "true_ade", "pred_drug", "pred_ade"],
+                data=[
+                    ["success", r["sentence"], r["pred_json"],
+                     r["true_drug"], r["true_ade"], r["pred_drug"], r["pred_ade"]]
+                    for r in successes
+                ] + [
+                    ["failure", r["sentence"], r["pred_json"],
+                     r["true_drug"], r["true_ade"], r["pred_drug"], r["pred_ade"]]
+                    for r in failures
+                ],
+            )
+        })
+
+        print(f"\nTest metrics for {run.name}:")
+        for k, v in test_metrics.items():
+            print(f"  {k}: {v:.4f}")
+        print(f"  runtime: {runtime:.0f}s   VRAM peak: {vram_peak:.2f} GB\n")
+
+        # Free GPU memory before the next run starts.
+        # trainer holds the PEFT-wrapped model — must be deleted first.
+        del trainer
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+# ── 9. Launch sweep ───────────────────────────────────────────────────────────
+sweep_id = os.environ.get("WANDB_SWEEP_ID")
+
+if sweep_id is None:
+    sweep_id = wandb.sweep(SWEEP_CONFIG, project=WANDB_PROJECT)
+    print(f"\nCreated sweep: {sweep_id}")
+    print(f"To join from another Kaggle session, set:")
+    print(f"  WANDB_SWEEP_ID={sweep_id}")
+
+# count=1 → this session trains exactly one configuration, then exits.
+# Start as many Kaggle sessions as you want parallel runs.
+wandb.agent(sweep_id, function=train, project=WANDB_PROJECT, count=1)
