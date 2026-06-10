@@ -129,8 +129,7 @@ def review_with_claude(diff_text: str) -> dict:
 
     response = client.messages.create(
         model="claude-opus-4-8",
-        max_tokens=4096,
-        thinking={"type": "adaptive"},
+        max_tokens=8192,
         system=(
             "You are an expert code reviewer. Identify bugs, security issues, "
             "performance problems, and code quality concerns. Be concise and actionable. "
