@@ -1,0 +1,139 @@
+[
+  {
+    "query": "What rescue inhaler is prescribed for wheezing or shortness of breath?",
+    "relevant_chunk_ids": ["d814aa5e-cb6e-4d5c-a384-2057afa93d59"],
+    "target_section": "General",
+    "notes": "Albuterol (ProAir HFA) is mentioned as rescue inhaler for asthma"
+  },
+  {
+    "query": "Advair Diskus 250/50 dosage instructions for maintenance therapy",
+    "relevant_chunk_ids": ["d814aa5e-cb6e-4d5c-a384-2057afa93d59"],
+    "target_section": "General",
+    "notes": "Fluticasone/salmeterol Advair Diskus 1 inhalation twice daily"
+  },
+  {
+    "query": "Singulair montelukast 10mg for asthma inflammation",
+    "relevant_chunk_ids": ["d814aa5e-cb6e-4d5c-a384-2057afa93d59"],
+    "target_section": "General",
+    "notes": "Montelukast Singulair 10mg tablet evening dose for asthma"
+  },
+  {
+    "query": "asthma patient medication instructions Cedar-Sinai",
+    "relevant_chunk_ids": ["d814aa5e-cb6e-4d5c-a384-2057afa93d59"],
+    "target_section": "General",
+    "notes": "Cedar-Sinai asthma prescription with three medications"
+  },
+  {
+    "query": "Augmentin 625mg prescription how many times a day",
+    "relevant_chunk_ids": ["5d0a1eda-54dc-4bc0-8e45-4163412a7f6a"],
+    "target_section": "General",
+    "notes": "Augmentin 625mg 1-0-1 x 5 days after meals"
+  },
+  {
+    "query": "Pan D 40mg dosage schedule",
+    "relevant_chunk_ids": ["5d0a1eda-54dc-4bc0-8e45-4163412a7f6a"],
+    "target_section": "General",
+    "notes": "Pan D 40mg 1-0-0 proton pump inhibitor"
+  },
+  {
+    "query": "Hexigel gum paint usage instructions",
+    "relevant_chunk_ids": ["5d0a1eda-54dc-4bc0-8e45-4163412a7f6a"],
+    "target_section": "General",
+    "notes": "Hexigel gum paint massage 1-0-1 x 1 week"
+  },
+  {
+    "query": "Enzoflam anti-inflammatory before meals dosage",
+    "relevant_chunk_ids": ["5d0a1eda-54dc-4bc0-8e45-4163412a7f6a"],
+    "target_section": "General",
+    "notes": "Enzoflam 1-0-1 x 5 days before meals"
+  },
+  {
+    "query": "diagnostic test options for evaluating a thyroid mass",
+    "relevant_chunk_ids": ["0b22e4b8-587d-490b-a1f6-700dfa73bded"],
+    "target_section": "General",
+    "notes": "Biopsy vs ultrasound for thyroid nodule evaluation"
+  },
+  {
+    "query": "needle biopsy versus ultrasound for neck mass",
+    "relevant_chunk_ids": ["0b22e4b8-587d-490b-a1f6-700dfa73bded"],
+    "target_section": "General",
+    "notes": "Benefits and risks of biopsy (90% accuracy, bleeding, infection) vs ultrasound"
+  },
+  {
+    "query": "solid neck mass 2cm that moves with swallowing no pain",
+    "relevant_chunk_ids": ["0b22e4b8-587d-490b-a1f6-700dfa73bded"],
+    "target_section": "General",
+    "notes": "Physical exam findings: 2cm solid nodule, moves with swallowing, no tenderness"
+  },
+  {
+    "query": "thyroid disorder functional versus structural classification",
+    "relevant_chunk_ids": ["0b22e4b8-587d-490b-a1f6-700dfa73bded"],
+    "target_section": "General",
+    "notes": "Functional (hormones, hypo/hyper) vs structural classification in thyroid workup"
+  },
+  {
+    "query": "Naproxen 500mg dosage frequency for pain",
+    "relevant_chunk_ids": ["c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"],
+    "target_section": "Medication",
+    "notes": "Naproxen 500mg 1 tablet every [DATE] for pain"
+  },
+  {
+    "query": "Gabapentin 300mg three times daily prescription",
+    "relevant_chunk_ids": ["c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"],
+    "target_section": "Medication",
+    "notes": "Gabapentin 300mg 1 tablet three times a day"
+  },
+  {
+    "query": "Acetaminophen 500mg two tablets dosage",
+    "relevant_chunk_ids": ["c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"],
+    "target_section": "Medication",
+    "notes": "Acetaminophen 500mg 2 tablets every [DATE]"
+  },
+  {
+    "query": "medications prescribed for pain management Naproxen Gabapentin",
+    "relevant_chunk_ids": [
+      "c5f4f9b2-71f2-41de-ae1c-c79d83b77c00",
+      "1c9df3b9-d68e-4602-b851-583651d98bc1"
+    ],
+    "target_section": "Medication",
+    "notes": "Both chunks are from same pain patient doc; medication chunk is primary answer"
+  },
+  {
+    "query": "abnormal abdominal pain ICD code diagnosis prescription",
+    "relevant_chunk_ids": [
+      "1c9df3b9-d68e-4602-b851-583651d98bc1",
+      "c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"
+    ],
+    "target_section": "General",
+    "notes": "1c9df3b9 has the diagnosis header; c5f4f9b2 has the actual medications"
+  },
+  {
+    "query": "side effects to watch for dizziness nausea allergic reaction contact doctor",
+    "relevant_chunk_ids": [
+      "d814aa5e-cb6e-4d5c-a384-2057afa93d59",
+      "c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"
+    ],
+    "target_section": "General",
+    "notes": "Patient instructions in both asthma and pain docs mention side effects monitoring"
+  },
+  {
+    "query": "Cedar-Sinai Health System 789 Care Boulevard prescription",
+    "relevant_chunk_ids": [
+      "d814aa5e-cb6e-4d5c-a384-2057afa93d59",
+      "1c9df3b9-d68e-4602-b851-583651d98bc1",
+      "c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"
+    ],
+    "target_section": "General",
+    "notes": "Both Cedar-Sinai documents (asthma and pain) should be retrieved"
+  },
+  {
+    "query": "patient instructions take medication as prescribed by doctor follow label carefully",
+    "relevant_chunk_ids": [
+      "d814aa5e-cb6e-4d5c-a384-2057afa93d59",
+      "c5f4f9b2-71f2-41de-ae1c-c79d83b77c00"
+    ],
+    "target_section": "General",
+    "notes": "Generic patient instruction text appears verbatim in both Cedar-Sinai chunks"
+  }
+]
+

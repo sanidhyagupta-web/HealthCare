@@ -79,30 +79,47 @@ def parse_diff_lines(patch: str) -> set[int]:
     return available
 
 
+MAX_FILES = 25
+MAX_TOTAL_CHARS = 60_000
+CODE_EXTS = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java", ".rb", ".rs", ".cs"}
+
+
 def build_diff_prompt(files: list[dict]) -> tuple[str, dict[str, set[int]]]:
+    # Prioritise source code files; skip binaries/data files with no patch
+    def priority(f: dict) -> int:
+        ext = "." + f["filename"].rsplit(".", 1)[-1] if "." in f["filename"] else ""
+        return 0 if ext in CODE_EXTS else 1
+
+    candidates = [f for f in files if f.get("patch")]
+    candidates.sort(key=priority)
+    candidates = candidates[:MAX_FILES]
+
     sections = []
     file_lines: dict[str, set[int]] = {}
+    total_chars = 0
 
-    for f in files:
+    for f in candidates:
+        if total_chars >= MAX_TOTAL_CHARS:
+            break
+
         filename = f["filename"]
         patch = f.get("patch", "")
-        if not patch:
-            continue
-
         available = parse_diff_lines(patch)
         if not available:
             continue
 
+        remaining = MAX_TOTAL_CHARS - total_chars
+        if len(patch) > min(8_000, remaining):
+            patch = patch[:min(8_000, remaining)] + "\n... (truncated)"
+
         file_lines[filename] = available
-
-        if len(patch) > 8_000:
-            patch = patch[:8_000] + "\n... (truncated)"
-
-        sections.append(
+        section = (
             f"### {filename} ({f['status']})\n"
             f"Commentable lines (new file): {sorted(available)}\n"
             f"```diff\n{patch}\n```"
         )
+        sections.append(section)
+        total_chars += len(section)
 
     return "\n\n".join(sections), file_lines
 
@@ -112,8 +129,7 @@ def review_with_claude(diff_text: str) -> dict:
 
     response = client.messages.create(
         model="claude-opus-4-8",
-        max_tokens=4096,
-        thinking={"type": "adaptive"},
+        max_tokens=8192,
         system=(
             "You are an expert code reviewer. Identify bugs, security issues, "
             "performance problems, and code quality concerns. Be concise and actionable. "
@@ -134,8 +150,11 @@ def review_with_claude(diff_text: str) -> dict:
         output_config={"format": {"type": "json_schema", "schema": REVIEW_SCHEMA}},
     )
 
-    text = next(b.text for b in response.content if b.type == "text")
-    return json.loads(text)
+    text_blocks = [b for b in response.content if b.type == "text"]
+    if not text_blocks:
+        types = [b.type for b in response.content]
+        raise RuntimeError(f"No text block in response. Block types: {types}. Stop reason: {response.stop_reason}")
+    return json.loads(text_blocks[0].text)
 
 
 def post_review(commit_sha: str, review: dict, file_lines: dict[str, set[int]]) -> str:
