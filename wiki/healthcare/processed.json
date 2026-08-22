@@ -1,0 +1,7 @@
+{
+  "meeting-1lipgt5Kvq5M_jXDkPT2h0QBZrAhqQmyMYWwpOotWWAs-2026-08-22T07-12-49-790Z": {
+    "status": "done",
+    "processed_at": "2026-08-22T07:30:00Z",
+    "decisions": ["DEC-0001", "DEC-0002", "DEC-0003", "DEC-0004", "DEC-0005"]
+  }
+}
