@@ -16,6 +16,7 @@ reconciliation:
   dependencies: []
   changes_plan: false
 linear_issue: https://linear.app/flightdecktest-2/issue/ABC-6/dec-0002-hybrid-retrieval-search-endpoint-bm25-vector-rrf
+superseded_by: DEC-0006
 ---
 
 ## Statement
