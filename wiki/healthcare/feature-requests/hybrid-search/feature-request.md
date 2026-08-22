@@ -4,7 +4,7 @@ slug: hybrid-search
 owners:
   - Sanidhya Gupta
 status: active
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 proposed_by: agent
 identity_confirmed: false
 ---
@@ -30,14 +30,17 @@ No search endpoint or UI exists yet — the ingestion pipeline (chunk, embed, wr
 | Date | Title | Type | Ticket |
 |---|---|---|---|
 | 2026-08-21 | [Hybrid retrieval search endpoint (BM25 + vector + RRF)](../../decisions/DEC-0002_hybrid-retrieval-search-endpoint.md) | decided | _draft, not yet filed_ |
-| 2026-08-21 | [Reject custom clinical embedding model fine-tuning this quarter](../../decisions/DEC-0004_reject-custom-embedding-model-finetuning.md) | rejected | _draft, not yet filed_ |
+| 2026-08-21 | [Reject custom clinical embedding model fine-tuning this quarter](../../decisions/DEC-0004_reject-custom-embedding-model-finetuning.md) | rejected | [Linear](https://linear.app/flightdecktest-2/issue/ABC-8/dec-0004-reject-custom-clinical-embedding-model-fine-tuning-this) |
+| 2026-08-22 | [Open scope and AC ambiguity on the embedding fine-tuning rejection ticket](../../decisions/DEC-0006_embedding-finetuning-ticket-scope-ambiguity.md) | unresolved | [Linear](https://linear.app/flightdecktest-2/issue/ABC-8/dec-0004-reject-custom-clinical-embedding-model-fine-tuning-this) |
 
 ## Evidence
 - [DEC-0002](../../decisions/DEC-0002_hybrid-retrieval-search-endpoint.md)
 - [DEC-0004](../../decisions/DEC-0004_reject-custom-embedding-model-finetuning.md)
+- [DEC-0006](../../decisions/DEC-0006_embedding-finetuning-ticket-scope-ambiguity.md)
 
 ## Open Questions
 - Is `hybrid-search` the right feature request for this work, or does it belong to an existing one? Created by an agent from decision DEC-0002 (meeting: healthcare-semantic-search-sprint-planning-2026-08-21); rename or merge if wrong.
+- Where do ABC-8's acceptance criteria belong, which chunker module the semantic-boundary chunking investment targets, whether there's a trigger for revisiting the fine-tuning rejection, and what success metric governs the chunking investment — currently unresolved, see [DEC-0006](../../decisions/DEC-0006_embedding-finetuning-ticket-scope-ambiguity.md).
 
 **Resolved:**
 - Nothing recorded yet.
