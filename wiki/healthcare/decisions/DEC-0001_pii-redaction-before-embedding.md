@@ -16,6 +16,7 @@ reconciliation:
   dependencies: []
   changes_plan: false
 linear_issue: https://linear.app/flightdecktest-2/issue/ABC-5/dec-0001-deterministic-pii-redaction-before-embedding
+superseded_by: DEC-0006
 ---
 
 ## Statement

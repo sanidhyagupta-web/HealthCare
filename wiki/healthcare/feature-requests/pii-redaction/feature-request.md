@@ -4,13 +4,13 @@ slug: pii-redaction
 owners:
   - Sanidhya Gupta
 status: active
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 proposed_by: agent
 identity_confirmed: false
 ---
 
 ## Current State
-Ingestion workers currently embed raw clinical text with no redaction step — patient names, medical record numbers, and dates of birth are entering the vector store as embeddings. A deterministic PII redaction stage has been decided ([DEC-0001](../../decisions/DEC-0001_pii-redaction-before-embedding.md)) to run before the embedding step, but is not yet implemented.
+Ingestion workers already run a PII redaction stage (`workers/pii_worker.py`) before embedding, but it does not match the deterministic design decided in DEC-0001: it uses Presidio (a model) as its primary detector, falling back to regex/dictionary matching only when Presidio isn't installed, and redacts to generic type-only placeholders (e.g. `[PATIENT_NAME]`, `[MRN]`) rather than stable per-patient pseudonymous tokens. DEC-0001 is superseded by [DEC-0006](../../decisions/DEC-0006_pii-redaction-implementation-mismatch.md) pending a follow-up ticket scoped against the real implementation.
 
 ## Key Facts
 - Ingestion volume is roughly 40,000 documents/night, which ruled out an LLM-based redaction pass on latency grounds ([DEC-0001](../../decisions/DEC-0001_pii-redaction-before-embedding.md)).
@@ -27,19 +27,23 @@ Ingestion workers currently embed raw clinical text with no redaction step — p
 ## Decisions
 | Date | Title | Type | Ticket |
 |---|---|---|---|
-| 2026-08-21 | [Deterministic PII redaction before embedding](../../decisions/DEC-0001_pii-redaction-before-embedding.md) | decided | _draft, not yet filed_ |
+| 2026-08-21 | [Deterministic PII redaction before embedding](../../decisions/DEC-0001_pii-redaction-before-embedding.md) | decided | [Linear](https://linear.app/flightdecktest-2/issue/ABC-5/dec-0001-deterministic-pii-redaction-before-embedding) |
+| 2026-08-22 | [PII redaction implementation contradicts DEC-0001](../../decisions/DEC-0006_pii-redaction-implementation-mismatch.md) | superseded | [Linear](https://linear.app/flightdecktest-2/issue/ABC-5/dec-0001-deterministic-pii-redaction-before-embedding) |
 
 ## Evidence
 - [DEC-0001](../../decisions/DEC-0001_pii-redaction-before-embedding.md)
+- [DEC-0006](../../decisions/DEC-0006_pii-redaction-implementation-mismatch.md)
 
 ## Open Questions
 - Is `pii-redaction` the right feature request for this work, or does it belong to an existing one? Created by an agent from decision DEC-0001 (meeting: healthcare-semantic-search-sprint-planning-2026-08-21); rename or merge if wrong.
+- Should a follow-up ticket be filed scoped against the current implementation (replace Presidio with the deterministic-only path; add real per-patient stable tokenization), or should DEC-0001's design be reconsidered instead ([DEC-0006](../../decisions/DEC-0006_pii-redaction-implementation-mismatch.md))?
 
 **Resolved:**
 - Nothing recorded yet.
 
 ## Risks / Rejected Approaches
 - An LLM-based redaction pass was considered and rejected: not deterministically reproducible for audit purposes, and too slow at ~40,000 documents/night ([DEC-0001](../../decisions/DEC-0001_pii-redaction-before-embedding.md)).
+- The current deployed redaction stage uses Presidio (a model) as its primary detector and collapses every value of a given type to the same generic placeholder — this contradicts DEC-0001 and needs replacing, not extending ([DEC-0006](../../decisions/DEC-0006_pii-redaction-implementation-mismatch.md)).
 
 ## Relationships
 **Depends On:** Nothing recorded yet.
