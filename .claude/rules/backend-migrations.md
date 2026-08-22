@@ -1,6 +1,6 @@
 ---
 paths:
-  - "**/migration*/**/*.sql" # <!-- CUSTOMIZE: glob pattern for migration files -->
+  - "db/models.py" # no migration tool in this repo — schema is defined directly here via SQLAlchemy
 ---
 
 # Database Migration Conventions

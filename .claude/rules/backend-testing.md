@@ -1,6 +1,6 @@
 ---
 paths:
-  - "**/test/**/*" # <!-- CUSTOMIZE: glob pattern for your backend test files -->
+  - "tests/**/*.py"
 ---
 
 # Backend Test Patterns

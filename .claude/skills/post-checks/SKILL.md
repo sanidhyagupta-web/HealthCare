@@ -17,34 +17,26 @@ Read `execution-state.md`. Check all tasks are complete. If any are incomplete o
 Read the Testing Strategy from `implementation-plan.md`. Verify each planned test file was created. Note any missing tests.
 
 ### 3. Read Verification Commands
-This is a single Python repo (no separate backend/frontend repos, no ops repo) — there is one
-command set below, not one per repo. There is no lint/format/type-check tooling configured
-(no `pyproject.toml`, no ruff/black/flake8/mypy config) — do not invent one; `pytest` is the only
-verification gate that exists.
+For each affected repository, read its CLAUDE.md for the testing and code quality commands.
 
-### 4. Run Tests
-Run tests scoped to the modules actually touched, not the full suite, unless the change is
-repo-wide (e.g. a shared dependency like `security/access_control.py` or `app/config.py`):
+### 4. Run Backend Checks
+This is a single Python repo (`app/`, `ingestion/`, `indexing/`, `search/`, `security/`, `workers/`, etc.) with no configured formatter, linter, or type checker (no `ruff`/`black`/`flake8`/`mypy` config anywhere in the repo) — do not invent one. Run the test suite, scoped to the affected test files where possible:
 ```bash
-# Whole affected test file
-pytest tests/unit/test_bulk_ingestion.py
-
-# Single test/class
-pytest tests/unit/test_bulk_ingestion.py::TestRbac
-
-# Full suite, when the change is broad or before considering work fully done
+# Whole suite
 pytest
 
-# With coverage
-pytest --cov=. --cov-report=term-missing
+# Affected files only
+pytest tests/unit/test_<affected_area>.py
 ```
 
-### 5. Frontend (`ui/`) Checks
-`ui/` is Streamlit (Python), not a separate JS app — there is no lint/build/type-check step for it.
-If `ui/` tests exist for the touched page (see `frontend-test` skill), run them the same way as step 4.
+### 5. Run Frontend Checks
+The "frontend" is `ui/` (Streamlit, Python) — there is no separate JS toolchain (no `package.json`, no lint/build step) and no dedicated `ui/` tests exist yet. It's checked by the same `pytest` run as step 4, not a separate command:
+```bash
+pytest tests/unit/test_<affected_ui_area>.py   # if a test exists for the touched ui/ page
+```
 
-### 6. Ops Validation
-Not applicable — this repo has no Helm/Terraform/Kubernetes ops directory. Skip this step.
+### 6. Run Ops Validation (if applicable)
+Validate any modified infrastructure files (Helm charts, Terraform, YAML).
 
 ### 7. Generate Verification Summary
 Cover: services/apps tested, test results, code quality results, build results, warnings.
