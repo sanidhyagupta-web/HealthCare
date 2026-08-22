@@ -16,6 +16,7 @@ reconciliation:
   dependencies: [DEC-0004]
   changes_plan: false
 linear_issue: https://linear.app/flightdecktest-2/issue/ABC-8/dec-0004-reject-custom-clinical-embedding-model-fine-tuning-this
+superseded_by: DEC-0007
 ---
 
 ## Statement
