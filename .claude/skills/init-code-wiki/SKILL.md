@@ -109,6 +109,8 @@ means different things in each.
 | **initialize** (default) | onboarding, or a human running `/init-code-wiki` | Scaffold the tree, then scan and populate it. Stops if the tree already exists. |
 | **refresh** | `/implement`'s `UPDATE_FEATURE_REGISTRY` phase, at the end of a ticket, or a human asking to refresh | Skip scaffolding entirely; re-run the scan (5a–5c) and rewrite content over the existing tree. |
 
+Per-ticket closeout (`closeout-feat-recorder`) is **not** a caller of either mode above — it writes `code-wiki/**` directly from the delivered diff on the PR's own branch, and never invokes this skill.
+
 Treat the run as **refresh** when the caller says refresh/update/rescan, or when the tree already
 exists and the caller clearly wants it brought current rather than created. When it is genuinely
 ambiguous, prefer refresh over stopping if the tree exists — a stale code wiki that consumers
